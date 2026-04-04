@@ -222,10 +222,11 @@ model Customer {
   ownerId     String
   type        CustomerType @default(PERSONAL)
   name        String
+  // Personal type only
   email       String?
   phone       String?
   lineId      String?
-  address     String?
+  // Both types
   taxId       String?
   companyName String?
   notes       String?
@@ -233,14 +234,30 @@ model Customer {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  owner          User            @relation("CustomerOwner", fields: [ownerId], references: [id])
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  owner          User              @relation("CustomerOwner", fields: [ownerId], references: [id])
   contactPersons ContactPerson[]
+  addresses      CustomerAddress[]
   deals          Deal[]
   changelog      ChangeLog[]
 
   @@index([tenantId])
   @@index([tenantId, ownerId])
+}
+
+model CustomerAddress {
+  id                String   @id @default(cuid())
+  customerId        String
+  label             String?
+  address           String
+  isDefaultBilling  Boolean  @default(false)
+  isDefaultShipping Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
 }
 
 model ContactPerson {
@@ -251,6 +268,7 @@ model ContactPerson {
   phone      String?
   email      String?
   lineId     String?
+  isPrimary  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

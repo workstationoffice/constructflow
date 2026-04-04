@@ -2,7 +2,7 @@ import { requireTenantUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { formatCurrency, formatDateTime, isDealAlert } from "@/lib/utils";
-import { User, Building2, Phone, Mail, MessageCircle, MapPin, AlertCircle } from "lucide-react";
+import { User, Building2, Phone, Mail, MessageCircle, MapPin, AlertCircle, Home, Truck, Star } from "lucide-react";
 import Link from "next/link";
 
 export default async function Customer360Page({ params }: { params: Promise<{ id: string }> }) {
@@ -14,6 +14,7 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
     include: {
       owner: { select: { id: true, name: true } },
       contactPersons: true,
+      addresses: { orderBy: { createdAt: "asc" } },
       deals: {
         where: { isActive: true },
         include: {
@@ -55,8 +56,8 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
           <h1 className="text-2xl font-bold text-slate-900">{customer.companyName ?? customer.name}</h1>
           {customer.companyName && <p className="text-slate-500">{customer.name}</p>}
           <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
-            {customer.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{customer.email}</span>}
-            {customer.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{customer.phone}</span>}
+            {customer.type === "PERSONAL" && customer.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{customer.email}</span>}
+            {customer.type === "PERSONAL" && customer.phone && <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{customer.phone}</span>}
             {customer.taxId && <span>Tax ID: {customer.taxId}</span>}
             <span>Owner: {customer.owner.name}</span>
           </div>
@@ -81,24 +82,54 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Contact Persons */}
-        <div className="bg-white rounded-xl border">
-          <div className="px-5 py-4 border-b font-semibold text-slate-900">Contact Persons</div>
-          <div className="divide-y">
-            {customer.contactPersons.length === 0 ? (
-              <div className="p-4 text-sm text-slate-400">No contacts added</div>
-            ) : (
-              customer.contactPersons.map((c) => (
-                <div key={c.id} className="px-5 py-3">
-                  <div className="font-medium text-sm text-slate-900">{c.name}</div>
-                  {c.position && <div className="text-xs text-slate-500">{c.position}</div>}
-                  <div className="flex gap-3 mt-1 text-xs text-slate-400">
-                    {c.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{c.phone}</span>}
-                    {c.lineId && <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" />{c.lineId}</span>}
+        {/* Left column: Contacts + Addresses */}
+        <div className="space-y-4">
+          {/* Contact Persons */}
+          <div className="bg-white rounded-xl border">
+            <div className="px-5 py-4 border-b font-semibold text-slate-900">Contact Persons</div>
+            <div className="divide-y">
+              {customer.contactPersons.length === 0 ? (
+                <div className="p-4 text-sm text-slate-400">No contacts added</div>
+              ) : (
+                customer.contactPersons.map((c) => (
+                  <div key={c.id} className="px-5 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-sm text-slate-900">{c.name}</span>
+                      {(c as any).isPrimary && <span className="flex items-center gap-0.5 text-xs font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full"><Star className="w-3 h-3 fill-amber-500 text-amber-500" />Primary</span>}
+                    </div>
+                    {c.position && <div className="text-xs text-slate-500">{c.position}</div>}
+                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-slate-400">
+                      {c.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{c.phone}</span>}
+                      {c.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{c.email}</span>}
+                      {c.lineId && <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" />{c.lineId}</span>}
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Addresses */}
+          <div className="bg-white rounded-xl border">
+            <div className="px-5 py-4 border-b font-semibold text-slate-900">Addresses</div>
+            <div className="divide-y">
+              {customer.addresses.length === 0 ? (
+                <div className="p-4 text-sm text-slate-400">No addresses added</div>
+              ) : (
+                customer.addresses.map((a) => (
+                  <div key={a.id} className="px-5 py-3">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      {a.label && <span className="text-xs font-semibold text-slate-600">{a.label}</span>}
+                      {a.isDefaultBilling  && <span className="flex items-center gap-0.5 text-xs font-semibold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded-full"><Home className="w-3 h-3" />Billing</span>}
+                      {a.isDefaultShipping && <span className="flex items-center gap-0.5 text-xs font-semibold text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded-full"><Truck className="w-3 h-3" />Shipping</span>}
+                    </div>
+                    <div className="text-xs text-slate-500 flex items-start gap-1">
+                      <MapPin className="w-3 h-3 mt-0.5 shrink-0" />{a.address}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
 

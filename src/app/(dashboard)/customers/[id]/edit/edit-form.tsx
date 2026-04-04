@@ -5,14 +5,25 @@ import { useRouter } from "next/navigation";
 import {
   Building2, User, Phone, Mail, MessageCircle, MapPin,
   FileText, Plus, Trash2, ArrowLeft, Hash, AlertCircle, CheckCircle,
+  Home, Truck, Star,
 } from "lucide-react";
+
+interface AddressRow {
+  id?: string;
+  label: string;
+  address: string;
+  isDefaultBilling: boolean;
+  isDefaultShipping: boolean;
+}
 
 interface ContactPersonRow {
   id?: string;
   name: string;
   position: string;
   phone: string;
+  email: string;
   lineId: string;
+  isPrimary: boolean;
 }
 
 interface Customer {
@@ -24,18 +35,15 @@ interface Customer {
   phone: string | null;
   lineId: string | null;
   taxId: string | null;
-  address: string | null;
   notes: string | null;
+  addresses: AddressRow[];
   contactPersons: ContactPersonRow[];
 }
 
 // ── Tax ID helpers ─────────────────────────────────────────────────────────
-function formatTaxId(raw: string) {
-  return raw.replace(/\D/g, "").slice(0, 13);
-}
+function formatTaxId(raw: string) { return raw.replace(/\D/g, "").slice(0, 13); }
 function validateTaxId(v: string): string {
   if (!v) return "";
-  if (!/^\d+$/.test(v)) return "Tax ID must contain only numbers";
   if (v.length !== 13) return `Tax ID must be 13 digits (${v.length}/13)`;
   return "";
 }
@@ -61,72 +69,94 @@ function formatPhoneDisplay(digits: string): string {
 }
 function validatePhone(digits: string): string {
   if (!digits) return "";
-  if (digits.length !== 9) return `Phone must be 9 digits after +66 (${digits.length}/9)`;
-  if (!/^[689]/.test(digits)) return "Thai mobile must start with 6, 8, or 9";
+  if (digits.length !== 9) return `Must be 9 digits after +66 (${digits.length}/9)`;
+  if (!/^[689]/.test(digits)) return "Must start with 6, 8, or 9";
   return "";
 }
-function toStoredPhone(digits: string): string {
-  return digits ? `+66${digits}` : "";
-}
+function toStoredPhone(digits: string) { return digits ? `+66${digits}` : ""; }
 
-const emptyContact = (): ContactPersonRow => ({ name: "", position: "", phone: "", lineId: "" });
+const emptyAddress = (): AddressRow => ({ label: "", address: "", isDefaultBilling: false, isDefaultShipping: false });
+const emptyContact = (): ContactPersonRow => ({ name: "", position: "", phone: "", email: "", lineId: "", isPrimary: false });
 
 export default function EditCustomerForm({ customer }: { customer: Customer }) {
   const router = useRouter();
 
-  const [type, setType]             = useState(customer.type);
-  const [name, setName]             = useState(customer.name);
+  const [type, setType]               = useState(customer.type);
+  const [name, setName]               = useState(customer.name);
   const [companyName, setCompanyName] = useState(customer.companyName ?? "");
-  const [email, setEmail]           = useState(customer.email ?? "");
+  const [taxId, setTaxId]             = useState(customer.taxId ?? "");
+  const [notes, setNotes]             = useState(customer.notes ?? "");
+
+  // Personal-only fields
   const [phoneDigits, setPhoneDigits] = useState(parseStoredPhone(customer.phone));
-  const [lineId, setLineId]         = useState(customer.lineId ?? "");
-  const [taxId, setTaxId]           = useState(customer.taxId ?? "");
-  const [address, setAddress]       = useState(customer.address ?? "");
-  const [notes, setNotes]           = useState(customer.notes ?? "");
-  const [contacts, setContacts]     = useState<ContactPersonRow[]>(
+  const [email, setEmail]             = useState(customer.email ?? "");
+  const [lineId, setLineId]           = useState(customer.lineId ?? "");
+
+  const [addresses, setAddresses] = useState<AddressRow[]>(
+    customer.addresses.length > 0
+      ? customer.addresses.map((a) => ({ ...a, label: a.label ?? "", id: a.id }))
+      : [emptyAddress()]
+  );
+
+  const [contacts, setContacts] = useState<ContactPersonRow[]>(
     customer.contactPersons.length > 0
       ? customer.contactPersons.map((c) => ({
           ...c,
           position: c.position ?? "",
-          phone: parseStoredPhone(c.phone),
+          phone: parseStoredPhone(c.phone ?? null),
+          email: c.email ?? "",
           lineId: c.lineId ?? "",
+          isPrimary: (c as any).isPrimary ?? false,
         }))
       : [emptyContact()]
   );
+
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
 
-  const taxIdError = validateTaxId(taxId);
-  const phoneError = validatePhone(phoneDigits);
+  const taxIdError  = validateTaxId(taxId);
+  const phoneError  = validatePhone(phoneDigits);
 
-  const updateContact = (i: number, field: keyof ContactPersonRow, value: string) =>
-    setContacts((prev) => prev.map((c, idx) => (idx === i ? { ...c, [field]: value } : c)));
+  // ── Address helpers ────────────────────────────────────────────────────
+  const updateAddress = (i: number, field: keyof AddressRow, value: any) => {
+    setAddresses((prev) => {
+      const next = prev.map((a, idx) => (idx === i ? { ...a, [field]: value } : a));
+      if (field === "isDefaultBilling" && value === true)
+        return next.map((a, idx) => ({ ...a, isDefaultBilling: idx === i }));
+      if (field === "isDefaultShipping" && value === true)
+        return next.map((a, idx) => ({ ...a, isDefaultShipping: idx === i }));
+      return next;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (taxId && taxIdError) { setError(taxIdError); return; }
-    if (phoneDigits && phoneError) { setError(phoneError); return; }
+    if (type === "PERSONAL" && phoneDigits && phoneError) { setError(phoneError); return; }
 
     setError("");
     setLoading(true);
     try {
-      const filledContacts = contacts.filter((c) => c.name.trim()).map(({ id: _id, ...rest }) => ({
+      const filledContacts  = contacts.filter((c) => c.name.trim()).map(({ id: _id, ...rest }) => ({
         ...rest,
         phone: rest.phone ? toStoredPhone(normalizePhoneInput(rest.phone)) : undefined,
       }));
+      const filledAddresses = addresses.filter((a) => a.address.trim()).map(({ id: _id, ...rest }) => rest);
+
       const res = await fetch(`/api/customers/${customer.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           type,
-          name,
-          companyName: type === "COMPANY" ? companyName : null,
-          email: email || null,
-          phone: toStoredPhone(phoneDigits) || null,
-          lineId: lineId || null,
+          name: type === "COMPANY" ? companyName : name,
+          companyName: type === "COMPANY" ? companyName || undefined : null,
           taxId: taxId || null,
-          address: address || null,
           notes: notes || null,
+          // Personal only
+          ...(type === "PERSONAL"
+            ? { phone: toStoredPhone(phoneDigits) || null, email: email || null, lineId: lineId || null }
+            : { phone: null, email: null, lineId: null }),
+          addresses: filledAddresses,
           contactPersons: filledContacts,
         }),
       });
@@ -140,7 +170,7 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-2xl space-y-6">
       <div className="flex items-center gap-3">
         <button onClick={() => router.back()} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ArrowLeft className="w-4 h-4 text-slate-600" />
@@ -158,9 +188,14 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
           </div>
         )}
 
-        {/* Type toggle */}
+        {/* ── Type toggle ──────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
-          <h2 className="font-semibold text-slate-900">Customer Type</h2>
+          <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+              <User className="w-3.5 h-3.5 text-white" />
+            </div>
+            Customer Type
+          </h2>
           <div className="flex gap-3">
             {(["COMPANY", "PERSONAL"] as const).map((t) => (
               <button key={t} type="button" onClick={() => setType(t)}
@@ -168,22 +203,21 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
                   type === t ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
                 }`}>
                 {t === "COMPANY" ? <Building2 className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                {t === "COMPANY" ? "Company" : "Personal"}
+                {t === "COMPANY" ? "Company (นิติบุคคล)" : "Personal (บุคคลธรรมดา)"}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Tax ID */}
+        {/* ── Tax ID (Company: with DBD note; Personal: citizen ID) ──── */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <h2 className="font-semibold text-slate-900 flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
               <Hash className="w-3.5 h-3.5 text-white" />
             </div>
-            Tax ID
+            {type === "COMPANY" ? "Tax ID (เลขนิติบุคคล)" : "Tax ID (เลขประจำตัวประชาชน)"}
           </h2>
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">เลขประจำตัวผู้เสียภาษี (13 หลัก)</label>
             <div className="relative">
               <input
                 value={taxId}
@@ -203,74 +237,68 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
                 </span>
               )}
             </div>
-            {taxId && taxIdError && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{taxIdError}</p>}
+            {taxId && taxIdError  && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{taxIdError}</p>}
             {taxId && !taxIdError && <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />Valid 13-digit Tax ID</p>}
           </div>
         </div>
 
-        {/* Basic Info */}
+        {/* ── Basic Info ────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <h2 className="font-semibold text-slate-900 flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
               <Building2 className="w-3.5 h-3.5 text-white" />
             </div>
-            Basic Information
+            {type === "COMPANY" ? "Company Information" : "Personal Information"}
           </h2>
 
           {type === "COMPANY" && (
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-slate-700">Company Name <span className="text-red-500">*</span></label>
               <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} required
+                placeholder="e.g. บริษัท เอบีซี อินทีเรีย จำกัด"
                 className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700">{type === "COMPANY" ? "Primary Contact Name" : "Full Name"} <span className="text-red-500">*</span></label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required
-              className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Phone +66 */}
+          {type === "PERSONAL" && (
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-blue-500" />Phone</label>
-              <div className={`flex items-center border-2 rounded-xl overflow-hidden transition-colors ${
-                phoneDigits && phoneError ? "border-red-400" :
-                phoneDigits && !phoneError ? "border-emerald-400" :
-                "border-slate-200 focus-within:border-violet-500"
-              }`}>
-                <span className="px-3 py-2.5 bg-slate-50 border-r border-slate-200 text-sm font-semibold text-slate-600 shrink-0 select-none">+66</span>
-                <input
-                  value={formatPhoneDisplay(phoneDigits)}
-                  onChange={(e) => setPhoneDigits(normalizePhoneInput(e.target.value))}
-                  inputMode="tel"
-                  placeholder="81-234-5678"
-                  className="flex-1 px-3 py-2.5 text-sm focus:outline-none bg-white"
-                />
-              </div>
-              {phoneDigits && phoneError && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{phoneError}</p>}
-              {phoneDigits && !phoneError && <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />+66{phoneDigits}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400" />Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="contact@company.com"
+              <label className="text-sm font-medium text-slate-700">Full Name <span className="text-red-500">*</span></label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="ชื่อ-นามสกุล"
                 className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
             </div>
-          </div>
+          )}
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5 text-green-500" />LINE ID</label>
-            <input value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder="@lineid"
-              className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" />Address</label>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={2} placeholder="ที่อยู่ / Full address..."
-              className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors resize-none" />
-          </div>
+          {/* Personal only: phone, email, LINE */}
+          {type === "PERSONAL" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-blue-500" />Phone</label>
+                  <div className={`flex items-center border-2 rounded-xl overflow-hidden transition-colors ${
+                    phoneDigits && phoneError ? "border-red-400" :
+                    phoneDigits && !phoneError ? "border-emerald-400" :
+                    "border-slate-200 focus-within:border-violet-500"
+                  }`}>
+                    <span className="px-3 py-2.5 bg-slate-50 border-r border-slate-200 text-sm font-semibold text-slate-600 shrink-0 select-none">+66</span>
+                    <input value={formatPhoneDisplay(phoneDigits)} onChange={(e) => setPhoneDigits(normalizePhoneInput(e.target.value))}
+                      inputMode="tel" placeholder="81-234-5678" className="flex-1 px-3 py-2.5 text-sm focus:outline-none bg-white" />
+                  </div>
+                  {phoneDigits && phoneError  && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{phoneError}</p>}
+                  {phoneDigits && !phoneError && <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />+66{phoneDigits}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-slate-400" />Email</label>
+                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com"
+                    className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5 text-green-500" />LINE ID</label>
+                <input value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder="@lineid"
+                  className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+              </div>
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5 text-slate-400" />Notes</label>
@@ -279,63 +307,153 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
           </div>
         </div>
 
-        {/* Contact Persons */}
+        {/* ── Addresses ──────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
-                <User className="w-3.5 h-3.5 text-white" />
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center">
+                <MapPin className="w-3.5 h-3.5 text-white" />
               </div>
-              Contact Persons
+              Addresses
             </h2>
-            <button type="button" onClick={() => setContacts((p) => [...p, emptyContact()])}
+            <button type="button" onClick={() => setAddresses((p) => [...p, emptyAddress()])}
               className="flex items-center gap-1.5 text-xs text-violet-600 font-semibold bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg transition-colors">
-              <Plus className="w-3.5 h-3.5" /> Add
+              <Plus className="w-3.5 h-3.5" /> Add Address
             </button>
           </div>
+
           <div className="space-y-3">
-            {contacts.map((c, i) => (
-              <div key={i} className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contact #{i + 1}</span>
-                  {contacts.length > 1 && (
-                    <button type="button" onClick={() => setContacts((p) => p.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600">
+            {addresses.map((a, i) => (
+              <div key={i} className={`rounded-xl border-2 p-4 space-y-3 transition-colors ${
+                a.isDefaultBilling && a.isDefaultShipping ? "border-violet-300 bg-violet-50/50" :
+                a.isDefaultBilling  ? "border-blue-300 bg-blue-50/50" :
+                a.isDefaultShipping ? "border-orange-300 bg-orange-50/50" :
+                "border-slate-200 bg-slate-50"
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {a.isDefaultBilling  && <span className="flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full"><Home className="w-3 h-3" />Default Billing</span>}
+                    {a.isDefaultShipping && <span className="flex items-center gap-1 text-xs font-semibold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full"><Truck className="w-3 h-3" />Default Shipping</span>}
+                    {!a.isDefaultBilling && !a.isDefaultShipping && <span className="text-xs text-slate-400 font-medium">Address #{i + 1}</span>}
+                  </div>
+                  {addresses.length > 1 && (
+                    <button type="button" onClick={() => setAddresses((p) => p.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600 transition-colors">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+
+                <div className="grid grid-cols-3 gap-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">Name *</label>
-                    <input value={c.name} onChange={(e) => updateContact(i, "name", e.target.value)} placeholder="Full name"
+                    <label className="text-xs font-medium text-slate-600">Label</label>
+                    <input value={a.label} onChange={(e) => updateAddress(i, "label", e.target.value)}
+                      placeholder="e.g. สำนักงานใหญ่, สาขา 1"
                       className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">Position</label>
-                    <input value={c.position} onChange={(e) => updateContact(i, "position", e.target.value)} placeholder="Position"
+                  <div className="col-span-2 space-y-1">
+                    <label className="text-xs font-medium text-slate-600">Address <span className="text-red-400">*</span></label>
+                    <input value={a.address} onChange={(e) => updateAddress(i, "address", e.target.value)}
+                      placeholder="Full address..."
                       className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">Phone</label>
-                    <div className="flex items-center border border-slate-200 bg-white rounded-lg overflow-hidden focus-within:border-violet-500 transition-colors">
-                      <span className="px-2 py-2 bg-slate-50 border-r border-slate-200 text-xs font-semibold text-slate-500 select-none">+66</span>
-                      <input
-                        value={formatPhoneDisplay(normalizePhoneInput(c.phone))}
-                        onChange={(e) => updateContact(i, "phone", normalizePhoneInput(e.target.value))}
-                        inputMode="tel" placeholder="81-234-5678"
-                        className="flex-1 px-2 py-2 text-sm focus:outline-none" />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">LINE ID</label>
-                    <input value={c.lineId} onChange={(e) => updateContact(i, "lineId", e.target.value)} placeholder="LINE ID"
-                      className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
-                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 pt-1">
+                  <label className={`flex items-center gap-2 cursor-pointer select-none text-sm font-medium rounded-lg px-3 py-1.5 transition-colors ${
+                    a.isDefaultBilling ? "bg-blue-100 text-blue-700" : "text-slate-500 hover:bg-slate-100"
+                  }`}>
+                    <input type="checkbox" checked={a.isDefaultBilling} onChange={(e) => updateAddress(i, "isDefaultBilling", e.target.checked)}
+                      className="accent-blue-600 w-3.5 h-3.5" />
+                    <Home className="w-3.5 h-3.5" /> Default Billing
+                  </label>
+                  <label className={`flex items-center gap-2 cursor-pointer select-none text-sm font-medium rounded-lg px-3 py-1.5 transition-colors ${
+                    a.isDefaultShipping ? "bg-orange-100 text-orange-700" : "text-slate-500 hover:bg-slate-100"
+                  }`}>
+                    <input type="checkbox" checked={a.isDefaultShipping} onChange={(e) => updateAddress(i, "isDefaultShipping", e.target.checked)}
+                      className="accent-orange-500 w-3.5 h-3.5" />
+                    <Truck className="w-3.5 h-3.5" /> Default Shipping
+                  </label>
                 </div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* ── Contact Persons (Company only) ───────────────────────────── */}
+        {type === "COMPANY" && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
+                  <User className="w-3.5 h-3.5 text-white" />
+                </div>
+                Contact Persons
+              </h2>
+              <button type="button" onClick={() => setContacts((p) => [...p, emptyContact()])}
+                className="flex items-center gap-1.5 text-xs text-violet-600 font-semibold bg-violet-50 hover:bg-violet-100 px-3 py-1.5 rounded-lg transition-colors">
+                <Plus className="w-3.5 h-3.5" /> Add Contact
+              </button>
+            </div>
+            <div className="space-y-3">
+              {contacts.map((c, i) => (
+                <div key={i} className={`rounded-xl p-4 border ${c.isPrimary ? "border-amber-300 bg-amber-50/50" : "bg-slate-50 border-slate-200"}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {c.isPrimary
+                        ? <span className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"><Star className="w-3 h-3 fill-amber-500 text-amber-500" />Primary</span>
+                        : <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Contact #{i + 1}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {!c.isPrimary && (
+                        <button type="button"
+                          onClick={() => setContacts((p) => p.map((x, idx) => ({ ...x, isPrimary: idx === i })))}
+                          className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center gap-1">
+                          <Star className="w-3 h-3" />Set Primary
+                        </button>
+                      )}
+                      {contacts.length > 1 && (
+                        <button type="button" onClick={() => setContacts((p) => p.filter((_, idx) => idx !== i))} className="text-red-400 hover:text-red-600">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Name <span className="text-red-400">*</span></label>
+                      <input value={c.name} onChange={(e) => setContacts((p) => p.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
+                        placeholder="Full name" className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Position</label>
+                      <input value={c.position} onChange={(e) => setContacts((p) => p.map((x, idx) => idx === i ? { ...x, position: e.target.value } : x))}
+                        placeholder="e.g. Procurement Manager" className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Phone</label>
+                      <div className="flex items-center border border-slate-200 bg-white rounded-lg overflow-hidden focus-within:border-violet-500 transition-colors">
+                        <span className="px-2 py-2 bg-slate-50 border-r border-slate-200 text-xs font-semibold text-slate-500 select-none">+66</span>
+                        <input value={formatPhoneDisplay(normalizePhoneInput(c.phone))}
+                          onChange={(e) => setContacts((p) => p.map((x, idx) => idx === i ? { ...x, phone: normalizePhoneInput(e.target.value) } : x))}
+                          inputMode="tel" placeholder="81-234-5678" className="flex-1 px-2 py-2 text-sm focus:outline-none" />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">Email</label>
+                      <input value={c.email} onChange={(e) => setContacts((p) => p.map((x, idx) => idx === i ? { ...x, email: e.target.value } : x))}
+                        placeholder="email@example.com" className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                    </div>
+                    <div className="col-span-2 space-y-1">
+                      <label className="text-xs font-medium text-slate-600">LINE ID</label>
+                      <input value={c.lineId} onChange={(e) => setContacts((p) => p.map((x, idx) => idx === i ? { ...x, lineId: e.target.value } : x))}
+                        placeholder="LINE ID" className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-3">
           <button type="button" onClick={() => router.back()}
@@ -343,7 +461,7 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
             Cancel
           </button>
           <button type="submit"
-            disabled={loading || !name || (type === "COMPANY" && !companyName) || !!(taxId && taxIdError) || !!(phoneDigits && phoneError)}
+            disabled={loading || (type === "PERSONAL" && !name) || (type === "COMPANY" && !companyName) || !!(taxId && taxIdError) || !!(type === "PERSONAL" && phoneDigits && phoneError)}
             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-semibold hover:from-violet-700 hover:to-indigo-700 disabled:opacity-40 transition-all shadow-lg shadow-violet-100">
             {loading ? "Saving..." : "Save Changes"}
           </button>

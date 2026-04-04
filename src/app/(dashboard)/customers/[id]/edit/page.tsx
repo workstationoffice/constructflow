@@ -9,7 +9,7 @@ export default async function EditCustomerPage({ params }: { params: Promise<{ i
 
   const customer = await prisma.customer.findFirst({
     where: { id, tenantId: user.tenantId },
-    include: { contactPersons: true },
+    include: { contactPersons: true, addresses: { orderBy: { createdAt: "asc" } } },
   });
 
   if (!customer) notFound();

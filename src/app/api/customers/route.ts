@@ -49,26 +49,21 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireTenantUser();
     const body = await req.json();
-    const { type, name, email, phone, lineId, address, taxId, companyName, notes, contactPersons } = body;
+    const { addresses, contactPersons, ...rest } = body;
 
     const customer = await prisma.customer.create({
       data: {
         tenantId: user.tenantId,
         ownerId: user.id,
-        type,
-        name,
-        email,
-        phone,
-        lineId,
-        address,
-        taxId,
-        companyName,
-        notes,
-        contactPersons: contactPersons?.length
-          ? { create: contactPersons }
+        ...rest,
+        contactPersons: contactPersons?.filter((c: any) => c.name?.trim()).length
+          ? { create: contactPersons.filter((c: any) => c.name?.trim()) }
+          : undefined,
+        addresses: addresses?.filter((a: any) => a.address?.trim()).length
+          ? { create: addresses.filter((a: any) => a.address?.trim()).map(({ id: _id, ...a }: any) => a) }
           : undefined,
       },
-      include: { contactPersons: true },
+      include: { contactPersons: true, addresses: true },
     });
 
     await logChange({

@@ -14,6 +14,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       include: {
         owner: { select: { id: true, name: true, email: true } },
         contactPersons: true,
+        addresses: { orderBy: { createdAt: "asc" } },
         deals: {
           include: {
             stage: true,
@@ -65,7 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    const { contactPersons, ...customerData } = body;
+    const { contactPersons, addresses, ...customerData } = body;
 
     const updated = await prisma.customer.update({
       where: { id },
@@ -79,8 +80,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
               .map(({ id: _id, ...rest }: any) => rest),
           },
         }),
+        ...(addresses !== undefined && {
+          addresses: {
+            deleteMany: {},
+            create: addresses
+              .filter((a: any) => a.address?.trim())
+              .map(({ id: _id, ...rest }: any) => rest),
+          },
+        }),
       },
-      include: { contactPersons: true },
+      include: { contactPersons: true, addresses: true },
     });
 
     await logObjectChanges({
