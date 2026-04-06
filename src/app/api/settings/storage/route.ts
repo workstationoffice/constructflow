@@ -26,11 +26,11 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const {
       provider,
-      r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2BucketName, r2PublicUrl,
+      r2AccountId, r2AccessKeyId, r2SecretAccessKey, r2BucketName, r2PublicUrl, r2Prefix,
       msClientId, msClientSecret, msTenantId,
-      sharepointSiteId, sharepointDriveId,
-      onedriveFolder,
-      googleDriveFolderId, googleServiceAccountEmail, googleServiceAccountKey,
+      sharepointSiteId, sharepointDriveId, sharepointFolderId, sharepointFolderPath,
+      onedriveFolder, onedriveFolderId, onedriveFolderPath,
+      googleDriveFolderId, googleDriveFolderPath, googleServiceAccountEmail, googleServiceAccountKey,
     } = body;
 
     const fields = {
@@ -40,13 +40,19 @@ export async function PUT(req: NextRequest) {
       r2SecretAccessKey: r2SecretAccessKey || null,
       r2BucketName:      r2BucketName      || null,
       r2PublicUrl:       r2PublicUrl        || null,
+      r2Prefix:          r2Prefix          ?? null,
       msClientId:        msClientId         || null,
       msClientSecret:    msClientSecret     || null,
       msTenantId:        msTenantId         || null,
-      sharepointSiteId:  sharepointSiteId  || null,
-      sharepointDriveId: sharepointDriveId || null,
+      sharepointSiteId:   sharepointSiteId    || null,
+      sharepointDriveId:  sharepointDriveId   || null,
+      sharepointFolderId: sharepointFolderId  || null,
+      sharepointFolderPath: sharepointFolderPath || null,
       onedriveFolder:    onedriveFolder     || null,
+      onedriveFolderId:  onedriveFolderId   || null,
+      onedriveFolderPath: onedriveFolderPath || null,
       googleDriveFolderId:          googleDriveFolderId          || null,
+      googleDriveFolderPath:        googleDriveFolderPath        || null,
       googleServiceAccountEmail:    googleServiceAccountEmail    || null,
       googleServiceAccountKey:      googleServiceAccountKey      || null,
     };

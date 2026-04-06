@@ -9,7 +9,9 @@ interface StorageConfigLike {
   msTenantId?: string | null;
   sharepointSiteId?: string | null;
   sharepointDriveId?: string | null;
+  sharepointFolderId?: string | null;
   onedriveFolder?: string | null;
+  onedriveFolderId?: string | null;
   googleDriveFolderId?: string | null;
   googleServiceAccountEmail?: string | null;
   googleServiceAccountKey?: string | null;
@@ -64,7 +66,7 @@ export async function uploadToSharePoint(
   contentType: string,
   config: StorageConfigLike
 ): Promise<UploadResult> {
-  const { msClientId, msClientSecret, msTenantId, sharepointSiteId, sharepointDriveId } = config;
+  const { msClientId, msClientSecret, msTenantId, sharepointSiteId, sharepointDriveId, sharepointFolderId } = config;
   if (!msClientId || !msClientSecret || !msTenantId || !sharepointSiteId)
     throw new Error("SharePoint is not fully configured (Tenant ID, Client ID, Client Secret, Site ID are required).");
 
@@ -72,13 +74,17 @@ export async function uploadToSharePoint(
     throw new Error("File exceeds 4 MB limit for SharePoint direct upload.");
 
   const token = await getMsToken(msClientId, msClientSecret, msTenantId);
-  const path = encodeURIComponent(`BuildFlow/${Date.now()}-${filename}`);
+  const safeName = `${Date.now()}-${filename}`;
 
-  const driveSegment = sharepointDriveId
-    ? `drives/${sharepointDriveId}`
-    : "drive";
-
-  const uploadUrl = `https://graph.microsoft.com/v1.0/sites/${sharepointSiteId}/${driveSegment}/root:/${path}:/content`;
+  let uploadUrl: string;
+  if (sharepointDriveId && sharepointFolderId && sharepointFolderId !== "root") {
+    // Upload into the specific folder the user picked
+    uploadUrl = `https://graph.microsoft.com/v1.0/drives/${sharepointDriveId}/items/${sharepointFolderId}:/${encodeURIComponent(safeName)}:/content`;
+  } else {
+    const driveSegment = sharepointDriveId ? `drives/${sharepointDriveId}` : "drive";
+    const path = encodeURIComponent(`BuildFlow/${safeName}`);
+    uploadUrl = `https://graph.microsoft.com/v1.0/sites/${sharepointSiteId}/${driveSegment}/root:/${path}:/content`;
+  }
 
   const res = await fetch(uploadUrl, {
     method: "PUT",
@@ -99,7 +105,7 @@ export async function uploadToOneDrive(
   contentType: string,
   config: StorageConfigLike
 ): Promise<UploadResult> {
-  const { msClientId, msClientSecret, msTenantId, onedriveFolder } = config;
+  const { msClientId, msClientSecret, msTenantId, onedriveFolder, onedriveFolderId } = config;
   if (!msClientId || !msClientSecret || !msTenantId)
     throw new Error("OneDrive is not fully configured (Tenant ID, Client ID, Client Secret are required).");
 
@@ -107,10 +113,17 @@ export async function uploadToOneDrive(
     throw new Error("File exceeds 4 MB limit for OneDrive direct upload.");
 
   const token = await getMsToken(msClientId, msClientSecret, msTenantId);
-  const folder = onedriveFolder?.replace(/^\/|\/$/g, "") || "BuildFlow";
-  const path = encodeURIComponent(`${folder}/${Date.now()}-${filename}`);
+  const safeName = `${Date.now()}-${filename}`;
 
-  const uploadUrl = `https://graph.microsoft.com/v1.0/sites/root/drive/root:/${path}:/content`;
+  let uploadUrl: string;
+  if (onedriveFolderId && onedriveFolderId !== "root") {
+    // Upload into the specific folder the user picked
+    uploadUrl = `https://graph.microsoft.com/v1.0/sites/root/drive/items/${onedriveFolderId}:/${encodeURIComponent(safeName)}:/content`;
+  } else {
+    const folder = onedriveFolder?.replace(/^\/|\/$/g, "") || "BuildFlow";
+    const path = encodeURIComponent(`${folder}/${safeName}`);
+    uploadUrl = `https://graph.microsoft.com/v1.0/sites/root/drive/root:/${path}:/content`;
+  }
 
   const res = await fetch(uploadUrl, {
     method: "PUT",

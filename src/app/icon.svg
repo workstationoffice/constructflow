@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background rounded square -->
+  <rect width="32" height="32" rx="7" fill="#6366f1"/>
+
+  <!-- Node 1 (top-left) -->
+  <circle cx="8" cy="10" r="3.5" fill="white"/>
+
+  <!-- Node 2 (top-right) -->
+  <circle cx="24" cy="10" r="3.5" fill="white"/>
+
+  <!-- Node 3 (bottom-center) -->
+  <circle cx="16" cy="24" r="3.5" fill="white"/>
+
+  <!-- Arrow: Node 1 → Node 2 -->
+  <line x1="11.5" y1="10" x2="20.5" y2="10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <polyline points="19,8 21.5,10 19,12" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Arrow: Node 2 → Node 3 -->
+  <line x1="22.2" y1="13" x2="17.8" y2="21" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <polyline points="19.5,20.5 17.5,22.5 15.5,20.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+  <!-- Arrow: Node 3 → Node 1 -->
+  <line x1="13" y1="22.5" x2="9.5" y2="13.5" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <polyline points="11,15 9.2,13 11.2,11.5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

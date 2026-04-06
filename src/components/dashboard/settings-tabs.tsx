@@ -2,16 +2,22 @@
 
 import { useState } from "react";
 import { HardDrive, Kanban, Shield, Plus, Trash2, GripVertical, Building2, Globe, CheckCircle, Hash } from "lucide-react";
+import SharePointFolderPicker, { type SharePointSelection } from "@/components/settings/sharepoint-folder-picker";
+import GoogleDriveFolderPicker, { type GoogleDriveSelection } from "@/components/settings/google-drive-folder-picker";
+import OneDriveFolderPicker, { type OneDriveSelection } from "@/components/settings/onedrive-folder-picker";
+import R2FolderPicker, { type R2Selection } from "@/components/settings/r2-folder-picker";
 
 interface Stage { id: string; name: string; color: string; order: number; isActive: boolean }
 interface StorageConfig {
   provider: string;
   r2AccountId?: string | null; r2AccessKeyId?: string | null; r2SecretAccessKey?: string | null;
-  r2BucketName?: string | null; r2PublicUrl?: string | null;
+  r2BucketName?: string | null; r2PublicUrl?: string | null; r2Prefix?: string | null;
   msClientId?: string | null; msClientSecret?: string | null; msTenantId?: string | null;
   sharepointSiteId?: string | null; sharepointDriveId?: string | null;
-  onedriveFolder?: string | null;
-  googleDriveFolderId?: string | null; googleServiceAccountEmail?: string | null; googleServiceAccountKey?: string | null;
+  sharepointFolderId?: string | null; sharepointFolderPath?: string | null;
+  onedriveFolder?: string | null; onedriveFolderId?: string | null; onedriveFolderPath?: string | null;
+  googleDriveFolderId?: string | null; googleDriveFolderPath?: string | null;
+  googleServiceAccountEmail?: string | null; googleServiceAccountKey?: string | null;
 }
 interface Tenant { name: string; timezone: string }
 
@@ -58,17 +64,47 @@ export function SettingsTabs({
   const [r2SecretAccessKey, setR2SecretKey]     = useState(storageConfig?.r2SecretAccessKey ?? "");
   const [r2BucketName, setR2BucketName]         = useState(storageConfig?.r2BucketName ?? "");
   const [r2PublicUrl, setR2PublicUrl]           = useState(storageConfig?.r2PublicUrl ?? "");
+  const [r2Selection, setR2Selection] = useState<R2Selection | null>(
+    storageConfig?.r2Prefix != null
+      ? { prefix: storageConfig.r2Prefix, displayPath: storageConfig.r2Prefix.replace(/\/$/, "").replace(/\//g, " / ") || "Bucket root" }
+      : null
+  );
   // Microsoft (SharePoint + OneDrive)
   const [msClientId, setMsClientId]             = useState(storageConfig?.msClientId ?? "");
   const [msClientSecret, setMsClientSecret]     = useState(storageConfig?.msClientSecret ?? "");
   const [msTenantId, setMsTenantId]             = useState(storageConfig?.msTenantId ?? "");
   const [sharepointSiteId, setSpSiteId]         = useState(storageConfig?.sharepointSiteId ?? "");
   const [sharepointDriveId, setSpDriveId]       = useState(storageConfig?.sharepointDriveId ?? "");
+  const [spSelection, setSpSelection] = useState<SharePointSelection | null>(
+    storageConfig?.sharepointSiteId && storageConfig?.sharepointDriveId
+      ? {
+          siteId: storageConfig.sharepointSiteId,
+          driveId: storageConfig.sharepointDriveId,
+          folderId: storageConfig.sharepointFolderId ?? "root",
+          folderPath: storageConfig.sharepointFolderPath ?? storageConfig.sharepointDriveId,
+        }
+      : null
+  );
   const [onedriveFolder, setOnedriveFolder]     = useState(storageConfig?.onedriveFolder ?? "");
+  const [odSelection, setOdSelection] = useState<OneDriveSelection | null>(
+    storageConfig?.onedriveFolderId
+      ? {
+          folderId: storageConfig.onedriveFolderId,
+          folderPath: storageConfig.onedriveFolderPath ?? storageConfig.onedriveFolderId,
+        }
+      : null
+  );
   // Google Drive
-  const [gDriveFolderId, setGDriveFolderId]     = useState(storageConfig?.googleDriveFolderId ?? "");
-  const [gSaEmail, setGSaEmail]                 = useState(storageConfig?.googleServiceAccountEmail ?? "");
-  const [gSaKey, setGSaKey]                     = useState(storageConfig?.googleServiceAccountKey ?? "");
+  const [gSaEmail, setGSaEmail]   = useState(storageConfig?.googleServiceAccountEmail ?? "");
+  const [gSaKey, setGSaKey]       = useState(storageConfig?.googleServiceAccountKey ?? "");
+  const [gdSelection, setGdSelection] = useState<GoogleDriveSelection | null>(
+    storageConfig?.googleDriveFolderId
+      ? {
+          folderId: storageConfig.googleDriveFolderId,
+          folderPath: storageConfig.googleDriveFolderPath ?? storageConfig.googleDriveFolderId,
+        }
+      : null
+  );
   const [storageSaved, setStorageSaved]         = useState(false);
   const [storageSaving, setStorageSaving]       = useState(false);
   const [stageSaving, setStageSaving] = useState(false);
@@ -112,10 +148,18 @@ export function SettingsTabs({
       body: JSON.stringify({
         provider: storageProvider,
         r2AccountId, r2AccessKeyId, r2SecretAccessKey: r2SecretAccessKey || null, r2BucketName, r2PublicUrl,
+        r2Prefix: r2Selection?.prefix ?? null,
         msClientId, msClientSecret: msClientSecret || null, msTenantId,
-        sharepointSiteId, sharepointDriveId,
+        sharepointSiteId: spSelection?.siteId ?? sharepointSiteId,
+        sharepointDriveId: spSelection?.driveId ?? sharepointDriveId,
+        sharepointFolderId: spSelection?.folderId ?? null,
+        sharepointFolderPath: spSelection?.folderPath ?? null,
         onedriveFolder,
-        googleDriveFolderId: gDriveFolderId, googleServiceAccountEmail: gSaEmail, googleServiceAccountKey: gSaKey || null,
+        onedriveFolderId: odSelection?.folderId ?? null,
+        onedriveFolderPath: odSelection?.folderPath ?? null,
+        googleDriveFolderId: gdSelection?.folderId ?? null,
+        googleDriveFolderPath: gdSelection?.folderPath ?? null,
+        googleServiceAccountEmail: gSaEmail, googleServiceAccountKey: gSaKey || null,
       }),
     });
     setStorageSaving(false);
@@ -255,43 +299,177 @@ export function SettingsTabs({
 
             {/* R2 credentials */}
             {storageProvider === "R2" && (
-              <CredentialPanel title="Cloudflare R2 Credentials" hint="Cloudflare Dashboard → R2 → Manage API Tokens" fields={[
-                { label: "Account ID",       value: r2AccountId,       set: setR2AccountId,   ph: "abcdef1234567890abcdef1234567890" },
-                { label: "Access Key ID",    value: r2AccessKeyId,     set: setR2AccessKeyId, ph: "your-access-key-id" },
-                { label: "Secret Access Key",value: r2SecretAccessKey, set: setR2SecretKey,   ph: "your-secret-access-key", secret: true },
-                { label: "Bucket Name",      value: r2BucketName,      set: setR2BucketName,  ph: "my-bucket" },
-                { label: "Public URL",       value: r2PublicUrl,       set: setR2PublicUrl,   ph: "https://pub-xxxx.r2.dev" },
-              ]} />
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">Cloudflare R2 Credentials</div>
+                  <div className="text-xs text-slate-500 mt-0.5">Cloudflare Dashboard → R2 → Manage API Tokens</div>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { label: "Account ID",        value: r2AccountId,       set: setR2AccountId,   ph: "abcdef1234567890abcdef1234567890", secret: false },
+                    { label: "Access Key ID",     value: r2AccessKeyId,     set: setR2AccessKeyId, ph: "your-access-key-id",              secret: false },
+                    { label: "Secret Access Key", value: r2SecretAccessKey, set: setR2SecretKey,   ph: "your-secret-access-key",          secret: true  },
+                    { label: "Bucket Name",       value: r2BucketName,      set: setR2BucketName,  ph: "my-bucket",                       secret: false },
+                    { label: "Public URL",        value: r2PublicUrl,       set: setR2PublicUrl,   ph: "https://pub-xxxx.r2.dev",         secret: false },
+                  ].map((f) => (
+                    <div key={f.label} className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">{f.label}</label>
+                      <input
+                        type={f.secret ? "password" : "text"}
+                        value={f.value}
+                        onChange={(e) => f.set(e.target.value)}
+                        placeholder={f.ph}
+                        className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="text-xs font-semibold text-slate-600 mb-2">Upload Prefix (optional)</div>
+                  <p className="text-xs text-slate-400 mb-2">Files will be stored under this prefix. Leave unset to use the bucket root.</p>
+                  <R2FolderPicker
+                    r2AccountId={r2AccountId}
+                    r2AccessKeyId={r2AccessKeyId}
+                    r2SecretAccessKey={r2SecretAccessKey}
+                    r2BucketName={r2BucketName}
+                    selection={r2Selection}
+                    onSelect={(s) => setR2Selection(s)}
+                  />
+                </div>
+              </div>
             )}
 
             {/* SharePoint credentials */}
             {storageProvider === "SHAREPOINT" && (
-              <CredentialPanel title="SharePoint Credentials" hint="Azure Portal → App Registrations → API permissions → Microsoft Graph → Sites.ReadWrite.All (Application)" fields={[
-                { label: "Azure Tenant ID",  value: msTenantId,       set: setMsTenantId,   ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-                { label: "Client ID",        value: msClientId,       set: setMsClientId,   ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-                { label: "Client Secret",    value: msClientSecret,   set: setMsClientSecret, ph: "your-client-secret-value", secret: true },
-                { label: "SharePoint Site ID", value: sharepointSiteId, set: setSpSiteId,   ph: "contoso.sharepoint.com,abc123,def456" },
-                { label: "Drive ID (optional)", value: sharepointDriveId, set: setSpDriveId, ph: "Leave blank to use the default document library" },
-              ]} />
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">SharePoint Credentials</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Azure Portal → App Registrations → API permissions → Microsoft Graph → Sites.ReadWrite.All (Application)
+                  </div>
+                </div>
+
+                {/* Azure credentials */}
+                <div className="space-y-3">
+                  {[
+                    { label: "Azure Tenant ID", value: msTenantId,     set: setMsTenantId,     ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: false },
+                    { label: "Client ID",       value: msClientId,     set: setMsClientId,     ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: false },
+                    { label: "Client Secret",   value: msClientSecret, set: setMsClientSecret, ph: "your-client-secret-value",             secret: true  },
+                  ].map((f) => (
+                    <div key={f.label} className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">{f.label}</label>
+                      <input
+                        type={f.secret ? "password" : "text"}
+                        value={f.value}
+                        onChange={(e) => f.set(e.target.value)}
+                        placeholder={f.ph}
+                        className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="text-xs font-semibold text-slate-600 mb-2">Target Folder</div>
+                  <SharePointFolderPicker
+                    msClientId={msClientId}
+                    msClientSecret={msClientSecret}
+                    msTenantId={msTenantId}
+                    selection={spSelection}
+                    onSelect={(s) => { setSpSelection(s); setSpSiteId(s.siteId); setSpDriveId(s.driveId); }}
+                  />
+                </div>
+              </div>
             )}
 
             {/* OneDrive credentials */}
             {storageProvider === "ONEDRIVE" && (
-              <CredentialPanel title="OneDrive Credentials" hint="Azure Portal → App Registrations → API permissions → Microsoft Graph → Files.ReadWrite.All (Application)" fields={[
-                { label: "Azure Tenant ID",  value: msTenantId,     set: setMsTenantId,       ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-                { label: "Client ID",        value: msClientId,     set: setMsClientId,       ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-                { label: "Client Secret",    value: msClientSecret, set: setMsClientSecret,   ph: "your-client-secret-value", secret: true },
-                { label: "Upload Folder Path", value: onedriveFolder, set: setOnedriveFolder, ph: "BuildFlow/Deals" },
-              ]} />
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">OneDrive Credentials</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    Azure Portal → App Registrations → API permissions → Microsoft Graph → Files.ReadWrite.All (Application)
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {[
+                    { label: "Azure Tenant ID", value: msTenantId,     set: setMsTenantId,     ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: false },
+                    { label: "Client ID",       value: msClientId,     set: setMsClientId,     ph: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: false },
+                    { label: "Client Secret",   value: msClientSecret, set: setMsClientSecret, ph: "your-client-secret-value",             secret: true  },
+                  ].map((f) => (
+                    <div key={f.label} className="space-y-1">
+                      <label className="text-xs font-medium text-slate-600">{f.label}</label>
+                      <input
+                        type={f.secret ? "password" : "text"}
+                        value={f.value}
+                        onChange={(e) => f.set(e.target.value)}
+                        placeholder={f.ph}
+                        className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="text-xs font-semibold text-slate-600 mb-2">Target Folder</div>
+                  <OneDriveFolderPicker
+                    msClientId={msClientId}
+                    msClientSecret={msClientSecret}
+                    msTenantId={msTenantId}
+                    selection={odSelection}
+                    onSelect={(s) => setOdSelection(s)}
+                  />
+                </div>
+              </div>
             )}
 
             {/* Google Drive credentials */}
             {storageProvider === "GOOGLE_DRIVE" && (
-              <CredentialPanel title="Google Drive Credentials" hint="GCP Console → IAM → Service Accounts → Keys → Add Key (JSON). Share target folder with the service account email." fields={[
-                { label: "Service Account Email", value: gSaEmail,       set: setGSaEmail,       ph: "my-sa@project.iam.gserviceaccount.com" },
-                { label: "Private Key (PEM)",     value: gSaKey,         set: setGSaKey,         ph: "-----BEGIN RSA PRIVATE KEY-----\n...", secret: true, multiline: true },
-                { label: "Folder ID",             value: gDriveFolderId, set: setGDriveFolderId, ph: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs" },
-              ]} />
+              <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 space-y-4">
+                <div>
+                  <div className="text-sm font-semibold text-slate-800">Google Drive Credentials</div>
+                  <div className="text-xs text-slate-500 mt-0.5">
+                    GCP Console → IAM → Service Accounts → Keys → Add Key (JSON). Share the target folder with the service account email.
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-600">Service Account Email</label>
+                    <input
+                      type="text"
+                      value={gSaEmail}
+                      onChange={(e) => setGSaEmail(e.target.value)}
+                      placeholder="my-sa@project.iam.gserviceaccount.com"
+                      className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-slate-600">Private Key (PEM)</label>
+                    <textarea
+                      value={gSaKey}
+                      onChange={(e) => setGSaKey(e.target.value)}
+                      placeholder={"-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"}
+                      rows={4}
+                      className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:border-violet-500 transition-colors resize-y"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-200 pt-3">
+                  <div className="text-xs font-semibold text-slate-600 mb-2">Target Folder</div>
+                  <GoogleDriveFolderPicker
+                    googleServiceAccountEmail={gSaEmail}
+                    googleServiceAccountKey={gSaKey}
+                    selection={gdSelection}
+                    onSelect={(s) => setGdSelection(s)}
+                  />
+                </div>
+              </div>
             )}
 
             <button onClick={saveStorage} disabled={storageSaving}

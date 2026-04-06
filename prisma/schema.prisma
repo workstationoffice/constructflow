@@ -434,6 +434,7 @@ model StorageConfig {
   r2SecretAccessKey   String?
   r2BucketName        String?
   r2PublicUrl         String?
+  r2Prefix            String?
   // Microsoft (shared by SharePoint + OneDrive)
   msClientId          String?
   msClientSecret      String?
@@ -441,10 +442,15 @@ model StorageConfig {
   // SharePoint
   sharepointSiteId    String?
   sharepointDriveId   String?
+  sharepointFolderId  String?
+  sharepointFolderPath String?
   // OneDrive
   onedriveFolder      String?
+  onedriveFolderId    String?
+  onedriveFolderPath  String?
   // Google Drive
   googleDriveFolderId       String?
+  googleDriveFolderPath     String?
   googleServiceAccountEmail String?
   googleServiceAccountKey   String?  // PEM private key
   updatedAt           DateTime        @updatedAt

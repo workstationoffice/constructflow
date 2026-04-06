@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         );
       }
       const buffer = Buffer.from(await file.arrayBuffer());
-      const key = getR2Key(user.tenantId, `deals/${id}`, file.name);
+      const key = getR2Key(user.tenantId, `deals/${id}`, file.name, creds.prefix);
       url = await uploadToR2(key, buffer, file.type, creds);
     } else {
       if (!storageConfig)

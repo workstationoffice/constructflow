@@ -9,6 +9,10 @@ export const metadata: Metadata = {
   title: "BuildFlow",
   description: "Field workforce & CRM tracking for interior design and construction teams",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

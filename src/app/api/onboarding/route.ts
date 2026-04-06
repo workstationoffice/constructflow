@@ -14,7 +14,28 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { companyName, slug, yourName } = body;
 
-    if (!companyName || !slug || !yourName) {
+    if (!yourName) {
+      return NextResponse.json({ error: "Your name is required" }, { status: 400 });
+    }
+
+    const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
+
+    // Check for pending invite first — activate the user and skip tenant creation
+    const pendingUser = await prisma.user.findFirst({
+      where: { email, clerkId: { startsWith: "pending_" }, isActive: false },
+      include: { tenant: true },
+    });
+
+    if (pendingUser) {
+      await prisma.user.update({
+        where: { id: pendingUser.id },
+        data: { clerkId: userId, isActive: true, name: yourName || pendingUser.name },
+      });
+      return NextResponse.json({ success: true, tenantId: pendingUser.tenantId }, { status: 200 });
+    }
+
+    // No pending invite — require company fields
+    if (!companyName || !slug) {
       return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
@@ -28,22 +49,6 @@ export async function POST(req: NextRequest) {
     const existingUser = await prisma.user.findUnique({ where: { clerkId: userId } });
     if (existingUser) {
       return NextResponse.json({ error: "Account already set up" }, { status: 409 });
-    }
-
-    const email = clerkUser.emailAddresses[0]?.emailAddress ?? "";
-
-    // Check for pending invite — if found, activate the user and skip tenant creation
-    const pendingUser = await prisma.user.findFirst({
-      where: { email, clerkId: { startsWith: "pending_" }, isActive: false },
-      include: { tenant: true },
-    });
-
-    if (pendingUser) {
-      await prisma.user.update({
-        where: { id: pendingUser.id },
-        data: { clerkId: userId, isActive: true, name: yourName || pendingUser.name },
-      });
-      return NextResponse.json({ success: true, tenantId: pendingUser.tenantId }, { status: 200 });
     }
 
     // Create tenant + admin user in a transaction

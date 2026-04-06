@@ -6,6 +6,7 @@ interface R2Credentials {
   secretAccessKey: string;
   bucketName:      string;
   publicUrl:       string;
+  prefix?:         string; // optional bucket prefix, e.g. "uploads/"
 }
 
 function makeS3(creds: R2Credentials) {
@@ -38,8 +39,9 @@ export async function deleteFromR2(key: string, creds: R2Credentials): Promise<v
   await makeS3(creds).deleteObject({ Bucket: creds.bucketName, Key: key }).promise();
 }
 
-export function getR2Key(tenantId: string, folder: string, filename: string): string {
-  return `${tenantId}/${folder}/${Date.now()}-${filename}`;
+export function getR2Key(tenantId: string, folder: string, filename: string, prefix?: string): string {
+  const base = `${tenantId}/${folder}/${Date.now()}-${filename}`;
+  return prefix ? `${prefix.replace(/\/+$/, "")}/${base}` : base;
 }
 
 export function getR2CredsFromConfig(config: {
@@ -48,6 +50,7 @@ export function getR2CredsFromConfig(config: {
   r2SecretAccessKey?: string | null;
   r2BucketName?: string | null;
   r2PublicUrl?: string | null;
+  r2Prefix?: string | null;
 }): R2Credentials | null {
   if (
     config.r2AccountId &&
@@ -62,6 +65,7 @@ export function getR2CredsFromConfig(config: {
       secretAccessKey: config.r2SecretAccessKey,
       bucketName:      config.r2BucketName,
       publicUrl:       config.r2PublicUrl,
+      prefix:          config.r2Prefix ?? undefined,
     };
   }
   return null;

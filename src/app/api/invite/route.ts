@@ -55,3 +55,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await requireTenantUser();
+    const canManage = await hasPermission(user.tenantId, user.role, Permission.MANAGE_USERS);
+    if (!canManage) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+    const { userId } = await req.json();
+    if (!userId) return NextResponse.json({ error: "userId is required" }, { status: 400 });
+
+    const pending = await prisma.user.findFirst({
+      where: { id: userId, tenantId: user.tenantId },
+    });
+    if (!pending) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!pending.clerkId?.startsWith("pending_"))
+      return NextResponse.json({ error: "User is not a pending invitation" }, { status: 400 });
+
+    await prisma.user.delete({ where: { id: userId } });
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
