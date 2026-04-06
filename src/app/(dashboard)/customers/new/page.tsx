@@ -95,6 +95,7 @@ export default function NewCustomerPage() {
   const [dbdLoading, setDbdLoading]   = useState(false);
   const [dbdResult, setDbdResult]     = useState<DbdResult | null>(null);
   const [dbdError, setDbdError]       = useState("");
+  const [dbdConfirm, setDbdConfirm]   = useState(false);
 
   const taxIdError  = validateTaxId(taxId);
   const phoneError  = validatePhone(phoneDigits);
@@ -112,10 +113,10 @@ export default function NewCustomerPage() {
     });
   };
 
-  // ── DBD Lookup ───────────────────────────────────────────────────��─────
-  const lookupDbd = async () => {
+  // ── DBD Lookup ────────────────────────────────────────────────────────
+  const performDbd = async () => {
+    setDbdConfirm(false);
     setDbdError(""); setDbdResult(null);
-    if (taxIdError || !taxId) { setDbdError("Enter a valid 13-digit Tax ID first"); return; }
     setDbdLoading(true);
     try {
       const res  = await fetch(`/api/dbd-lookup?taxId=${taxId}`);
@@ -129,6 +130,12 @@ export default function NewCustomerPage() {
       setType("COMPANY");
     } catch (e: any) { setDbdError(e.message); }
     finally { setDbdLoading(false); }
+  };
+
+  const lookupDbd = () => {
+    if (taxIdError || !taxId) { setDbdError("Enter a valid 13-digit Tax ID first"); return; }
+    setDbdError(""); setDbdResult(null);
+    setDbdConfirm(true);
   };
 
   // ── Submit ───────────────────────��─────────────────────────────���───────
@@ -170,6 +177,40 @@ export default function NewCustomerPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* DBD Confirmation Dialog */}
+      {dbdConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <Search className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900">Get info from DBD?</h2>
+                <p className="text-sm text-slate-500 mt-0.5">This will fill in company data automatically.</p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 space-y-1">
+              <p className="font-medium">The following will be filled / replaced:</p>
+              <ul className="list-disc list-inside text-xs space-y-0.5 text-amber-700">
+                <li>Company name</li>
+                <li>Address (registered address)</li>
+              </ul>
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setDbdConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={performDbd}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => router.back()} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">

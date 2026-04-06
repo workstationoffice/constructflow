@@ -27,8 +27,9 @@ model Tenant {
   visits           Visit[]
   calendarPlans    CalendarPlan[]
   rolePermissions  RolePermission[]
-  storageConfig    StorageConfig?
+  storageConfig      StorageConfig?
   notificationConfig NotificationConfig[]
+  documentSequences  DocumentSequence[]
 }
 
 // ─── USERS & ROLES ─────────────────────────────────────────────────────────
@@ -222,6 +223,7 @@ model Customer {
   tenantId    String
   ownerId     String
   type        CustomerType @default(PERSONAL)
+  code        String?
   name        String
   // Personal type only
   email       String?
@@ -240,8 +242,8 @@ model Customer {
   contactPersons ContactPerson[]
   addresses      CustomerAddress[]
   deals          Deal[]
-  changelog      ChangeLog[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@index([tenantId, ownerId])
 }
@@ -308,10 +310,13 @@ model Deal {
   tenantId            String
   customerId          String
   stageId             String
+  code                String?
   title               String
   value               Float    @default(0)
   currency            String   @default("THB")
   siteLocation        String?
+  siteLat             Float?
+  siteLng             Float?
   budget              Float?
   requirements        String?
   nextContactDate     DateTime?
@@ -329,8 +334,8 @@ model Deal {
   attachments   DealAttachment[]
   visits        Visit[]
   calendarPlans CalendarPlan[]
-  changelog     ChangeLog[]
 
+  @@unique([tenantId, code])
   @@index([tenantId])
   @@index([tenantId, customerId])
   @@index([tenantId, stageId])
@@ -401,16 +406,48 @@ model DealAttachment {
   @@index([dealId])
 }
 
+// ─── DOCUMENT SEQUENCES ────────────────────────────────────────────────────
+
+model DocumentSequence {
+  id            String   @id @default(cuid())
+  tenantId      String
+  type          String   // "CUSTOMER", "DEAL", etc.
+  prefix        String
+  paddingLength Int      @default(5)
+  lastNumber    Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, type])
+}
+
 // ─── STORAGE CONFIG ────────────────────────────────────────────────────────
 
 model StorageConfig {
-  id               String          @id @default(cuid())
-  tenantId         String          @unique
-  provider         StorageProvider @default(R2)
-  sharepointSiteId String?
-  onedriveFolder   String?
-  googleDriveFolderId String?
-  updatedAt        DateTime        @updatedAt
+  id                  String          @id @default(cuid())
+  tenantId            String          @unique
+  provider            StorageProvider @default(R2)
+  // Cloudflare R2
+  r2AccountId         String?
+  r2AccessKeyId       String?
+  r2SecretAccessKey   String?
+  r2BucketName        String?
+  r2PublicUrl         String?
+  // Microsoft (shared by SharePoint + OneDrive)
+  msClientId          String?
+  msClientSecret      String?
+  msTenantId          String?
+  // SharePoint
+  sharepointSiteId    String?
+  sharepointDriveId   String?
+  // OneDrive
+  onedriveFolder      String?
+  // Google Drive
+  googleDriveFolderId       String?
+  googleServiceAccountEmail String?
+  googleServiceAccountKey   String?  // PEM private key
+  updatedAt           DateTime        @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -454,8 +491,6 @@ model ChangeLog {
   createdAt  DateTime        @default(now())
 
   user     User?     @relation(fields: [userId], references: [id])
-  customer Customer? @relation(fields: [entityId], references: [id], map: "changelog_customer_fk")
-  deal     Deal?     @relation(fields: [entityId], references: [id], map: "changelog_deal_fk")
 
   @@index([entityType, entityId])
   @@index([userId])

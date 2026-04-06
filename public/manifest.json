@@ -1,6 +1,6 @@
 {
-  "name": "ConstructFlow",
-  "short_name": "ConstructFlow",
+  "name": "BuildFlow",
+  "short_name": "BuildFlow",
   "description": "Field workforce & CRM tracking for interior design and construction teams",
   "start_url": "/",
   "display": "standalone",

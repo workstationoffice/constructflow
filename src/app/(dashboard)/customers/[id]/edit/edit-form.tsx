@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Building2, User, Phone, Mail, MessageCircle, MapPin,
   FileText, Plus, Trash2, ArrowLeft, Hash, AlertCircle, CheckCircle,
-  Home, Truck, Star,
+  Home, Truck, Star, Search, Loader2,
 } from "lucide-react";
 import ThaiAddressFields from "@/components/ui/thai-address-fields";
 
@@ -123,11 +123,40 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
       : [emptyContact()]
   );
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState("");
+
+  // DBD
+  const [dbdLoading, setDbdLoading]   = useState(false);
+  const [dbdResult, setDbdResult]     = useState<{ nameTh?: string; type?: string; status?: string; address?: string } | null>(null);
+  const [dbdError, setDbdError]       = useState("");
+  const [dbdConfirm, setDbdConfirm]   = useState(false);
 
   const taxIdError  = validateTaxId(taxId);
   const phoneError  = validatePhone(phoneDigits);
+
+  const performDbd = async () => {
+    setDbdConfirm(false);
+    setDbdError(""); setDbdResult(null);
+    setDbdLoading(true);
+    try {
+      const res  = await fetch(`/api/dbd-lookup?taxId=${taxId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "DBD lookup failed");
+      setDbdResult(data);
+      if (data.nameTh) setCompanyName(data.nameTh);
+      if (data.address) {
+        setAddresses([{ label: "สำนักงานใหญ่", address: data.address, subDistrict: "", district: "", province: "", postalCode: "", isDefaultBilling: true, isDefaultShipping: true }]);
+      }
+    } catch (e: any) { setDbdError(e.message); }
+    finally { setDbdLoading(false); }
+  };
+
+  const lookupDbd = () => {
+    if (taxIdError || !taxId) { setDbdError("Enter a valid 13-digit Tax ID first"); return; }
+    setDbdError(""); setDbdResult(null);
+    setDbdConfirm(true);
+  };
 
   // ── Address helpers ────────────────────────────────────────────────────
   const updateAddress = (i: number, field: keyof AddressRow, value: any) => {
@@ -184,6 +213,40 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
 
   return (
     <div className="max-w-2xl space-y-6">
+      {/* DBD Confirmation Dialog */}
+      {dbdConfirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <Search className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900">Get info from DBD?</h2>
+                <p className="text-sm text-slate-500 mt-0.5">This will overwrite existing data.</p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 space-y-1">
+              <p className="font-medium">The following will be replaced:</p>
+              <ul className="list-disc list-inside text-xs space-y-0.5 text-amber-700">
+                <li>Company name</li>
+                <li>Address (replaced with registered address)</li>
+              </ul>
+            </div>
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setDbdConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+              <button type="button" onClick={performDbd}
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm">
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-3">
         <button onClick={() => router.back()} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
           <ArrowLeft className="w-4 h-4 text-slate-600" />
@@ -222,36 +285,59 @@ export default function EditCustomerForm({ customer }: { customer: Customer }) {
           </div>
         </div>
 
-        {/* ── Tax ID (Company: with DBD note; Personal: citizen ID) ──── */}
+        {/* ── Tax ID ───────────────────────────────────────────────────── */}
         <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
           <h2 className="font-semibold text-slate-900 flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
               <Hash className="w-3.5 h-3.5 text-white" />
             </div>
-            {type === "COMPANY" ? "Tax ID (เลขนิติบุคคล)" : "Tax ID (เลขประจำตัวประชาชน)"}
+            {type === "COMPANY" ? "Tax ID &amp; DBD Lookup" : "Tax ID (เลขประจำตัวประชาชน)"}
           </h2>
-          <div className="space-y-1.5">
-            <div className="relative">
-              <input
-                value={taxId}
-                onChange={(e) => setTaxId(formatTaxId(e.target.value))}
-                inputMode="numeric"
-                maxLength={13}
-                placeholder="0000000000000"
-                className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none transition-colors ${
-                  taxId && taxIdError ? "border-red-400 bg-red-50" :
-                  taxId && !taxIdError ? "border-emerald-400 bg-emerald-50" :
-                  "border-slate-200 focus:border-violet-500"
-                }`}
-              />
-              {taxId && (
-                <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold ${taxId.length === 13 ? "text-emerald-600" : "text-slate-400"}`}>
-                  {taxId.length}/13
-                </span>
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <input
+                  value={taxId}
+                  onChange={(e) => { setTaxId(formatTaxId(e.target.value)); setDbdResult(null); setDbdError(""); }}
+                  inputMode="numeric"
+                  maxLength={13}
+                  placeholder="0000000000000"
+                  className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm font-mono focus:outline-none transition-colors ${
+                    taxId && taxIdError ? "border-red-400 bg-red-50" :
+                    taxId && !taxIdError ? "border-emerald-400 bg-emerald-50" :
+                    "border-slate-200 focus:border-violet-500"
+                  }`}
+                />
+                {taxId && (
+                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono font-semibold ${taxId.length === 13 ? "text-emerald-600" : "text-slate-400"}`}>
+                    {taxId.length}/13
+                  </span>
+                )}
+              </div>
+              {type === "COMPANY" && (
+                <button type="button" onClick={lookupDbd} disabled={dbdLoading || !!taxIdError || taxId.length !== 13}
+                  className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:from-amber-600 hover:to-orange-600 disabled:opacity-40 transition-all whitespace-nowrap shadow-sm">
+                  {dbdLoading ? <><Loader2 className="w-4 h-4 animate-spin" />Fetching...</> : <><Search className="w-4 h-4" />Get from DBD</>}
+                </button>
               )}
             </div>
             {taxId && taxIdError  && <p className="text-xs text-red-600 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" />{taxIdError}</p>}
             {taxId && !taxIdError && <p className="text-xs text-emerald-600 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" />Valid 13-digit Tax ID</p>}
+            {dbdError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><p>{dbdError}</p>
+              </div>
+            )}
+            {dbdResult && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 space-y-1">
+                <p className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" />ดึงข้อมูลสำเร็จ — กรอกอัตโนมัติแล้ว</p>
+                <div className="text-xs text-emerald-800 space-y-0.5">
+                  {dbdResult.nameTh && <p><span className="font-medium">ชื่อ:</span> {dbdResult.nameTh}</p>}
+                  {dbdResult.type   && <p><span className="font-medium">ประเภท:</span> {dbdResult.type}</p>}
+                  {dbdResult.status && <p><span className="font-medium">สถานะ:</span> <span className={dbdResult.status.includes("ยัง") ? "text-emerald-700 font-semibold" : "text-orange-700"}>{dbdResult.status}</span></p>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

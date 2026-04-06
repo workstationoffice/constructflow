@@ -5,6 +5,7 @@ import { Permission, RoleType } from "@prisma/client";
 import { hasPermission } from "@/lib/permissions";
 import { logChange } from "@/lib/changelog";
 import { ChangeLogEntity } from "@prisma/client";
+import { generateDocumentCode } from "@/lib/document-code";
 
 function validateDeal(data: {
   nextContactDate?: string;
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
     const user = await requireTenantUser();
     const body = await req.json();
     const {
-      customerId, stageId, title, value, siteLocation, budget,
+      customerId, stageId, title, value, siteLocation, siteLat, siteLng, budget,
       requirements, nextContactDate, estimatedCloseDate, notes, assigneeIds,
     } = body;
 
@@ -92,15 +93,20 @@ export async function POST(req: NextRequest) {
     const errors = validateDeal({ nextContactDate, estimatedCloseDate });
     if (errors.length > 0) return NextResponse.json({ errors }, { status: 422 });
 
+    const code = await generateDocumentCode(user.tenantId, "DEAL");
+
     const deal = await prisma.deal.create({
       data: {
         tenantId: user.tenantId,
         customerId,
+        code,
         stageId,
         title,
         value: value ?? 0,
         currency: "THB",
         siteLocation,
+        siteLat: siteLat ?? null,
+        siteLng: siteLng ?? null,
         budget,
         requirements,
         nextContactDate: nextContactDate ? new Date(nextContactDate) : undefined,

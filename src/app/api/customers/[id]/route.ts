@@ -24,12 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           where: { isActive: true },
           orderBy: { createdAt: "desc" },
         },
-        changelog: {
-          orderBy: { createdAt: "desc" },
-          take: 50,
-          include: { user: { select: { id: true, name: true } } },
         },
-      },
     });
 
     if (!customer) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -84,7 +79,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           addresses: {
             deleteMany: {},
             create: addresses
-              .filter((a: any) => a.address?.trim())
+              .filter((a: any) => a.address?.trim() || a.subDistrict?.trim() || a.province?.trim())
               .map(({ id: _id, ...rest }: any) => rest),
           },
         }),

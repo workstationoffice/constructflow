@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantUser } from "@/lib/auth";
-import { uploadToR2, getR2Key } from "@/lib/r2";
+import { uploadToR2, getR2Key, getR2CredsFromConfig } from "@/lib/r2";
 import { sendCheckInEmail } from "@/lib/resend";
 import { sendCheckInLineNotification } from "@/lib/line";
 import { VisitStatus, RoleType } from "@prisma/client";
@@ -35,9 +35,13 @@ export async function POST(req: NextRequest) {
     // Upload selfie
     let selfieUrl: string | undefined;
     if (selfieFile) {
-      const buffer = Buffer.from(await selfieFile.arrayBuffer());
-      const key = getR2Key(user.tenantId, "selfies", `${user.id}.jpg`);
-      selfieUrl = await uploadToR2(key, buffer, selfieFile.type);
+      const storageConfig = await prisma.storageConfig.findUnique({ where: { tenantId: user.tenantId } });
+      const r2Creds = storageConfig ? getR2CredsFromConfig(storageConfig) : null;
+      if (r2Creds) {
+        const buffer = Buffer.from(await selfieFile.arrayBuffer());
+        const key = getR2Key(user.tenantId, "selfies", `${user.id}.jpg`);
+        selfieUrl = await uploadToR2(key, buffer, selfieFile.type, r2Creds);
+      }
     }
 
     // Create or update visit

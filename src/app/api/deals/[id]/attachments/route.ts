@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantUser } from "@/lib/auth";
-import { uploadToR2, getR2Key } from "@/lib/r2";
+import { uploadToR2, getR2Key, getR2CredsFromConfig } from "@/lib/r2";
+import { uploadToCloudStorage } from "@/lib/storage";
 import { StorageProvider } from "@prisma/client";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -14,7 +15,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
     if (!deal) return NextResponse.json({ error: "Deal not found" }, { status: 404 });
 
-    // Get tenant storage config
     const storageConfig = await prisma.storageConfig.findUnique({
       where: { tenantId: user.tenantId },
     });
@@ -30,13 +30,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let externalId: string | undefined;
 
     if (provider === StorageProvider.R2) {
+      const creds = storageConfig ? getR2CredsFromConfig(storageConfig) : null;
+      if (!creds) {
+        return NextResponse.json(
+          { error: "R2 storage is not configured. Please go to Settings → Storage and enter your Cloudflare R2 credentials." },
+          { status: 422 }
+        );
+      }
       const buffer = Buffer.from(await file.arrayBuffer());
       const key = getR2Key(user.tenantId, `deals/${id}`, file.name);
-      url = await uploadToR2(key, buffer, file.type);
+      url = await uploadToR2(key, buffer, file.type, creds);
     } else {
-      // For SharePoint/OneDrive/Google Drive: return placeholder
-      // Real implementation requires OAuth tokens from Clerk
-      url = `[${provider}] ${file.name}`;
+      if (!storageConfig)
+        return NextResponse.json({ error: "Storage not configured." }, { status: 422 });
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const result = await uploadToCloudStorage(file.name, buffer, file.type, storageConfig);
+      url = result.url;
+      externalId = result.externalId;
     }
 
     const attachment = await prisma.dealAttachment.create({
@@ -54,7 +64,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     return NextResponse.json({ attachment }, { status: 201 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

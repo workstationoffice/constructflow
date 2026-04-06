@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { formatCurrency, formatDateTime, isDealAlert } from "@/lib/utils";
 import { User, Building2, Phone, Mail, MessageCircle, MapPin, AlertCircle, Home, Truck, Star } from "lucide-react";
 import Link from "next/link";
+import ConvertTypeButton from "@/components/customers/convert-type-button";
 
 export default async function Customer360Page({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireTenantUser();
@@ -24,23 +25,26 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
         },
         orderBy: { value: "desc" },
       },
-      changelog: {
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: { user: { select: { name: true } } },
-      },
     },
   });
 
   if (!customer) notFound();
 
   const dealIds = customer.deals.map((d) => d.id);
-  const visits = await prisma.visit.findMany({
-    where: { dealId: { in: dealIds } },
-    include: { user: { select: { name: true } }, site: true },
-    orderBy: { checkInAt: "desc" },
-    take: 10,
-  });
+  const [visits, changelog] = await Promise.all([
+    prisma.visit.findMany({
+      where: { dealId: { in: dealIds } },
+      include: { user: { select: { name: true } }, site: true },
+      orderBy: { checkInAt: "desc" },
+      take: 10,
+    }),
+    prisma.changeLog.findMany({
+      where: { entityType: "CUSTOMER", entityId: id },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+      include: { user: { select: { name: true } } },
+    }),
+  ]);
 
   const totalPipelineValue = customer.deals.reduce((s, d) => s + d.value, 0);
   const totalBudget = customer.deals.reduce((s, d) => s + (d.budget ?? 0), 0);
@@ -53,7 +57,12 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
           {customer.type === "COMPANY" ? <Building2 className="w-7 h-7 text-slate-500" /> : <User className="w-7 h-7 text-slate-500" />}
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-slate-900">{customer.companyName ?? customer.name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900">{customer.companyName ?? customer.name}</h1>
+            {customer.code && (
+              <span className="text-sm font-mono font-medium text-slate-400 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">{customer.code}</span>
+            )}
+          </div>
           {customer.companyName && <p className="text-slate-500">{customer.name}</p>}
           <div className="flex flex-wrap gap-4 mt-2 text-sm text-slate-500">
             {customer.type === "PERSONAL" && customer.email && <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{customer.email}</span>}
@@ -62,7 +71,15 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
             <span>Owner: {customer.owner.name}</span>
           </div>
         </div>
-        <Link href={`/customers/${id}/edit`} className="text-sm text-blue-600 hover:underline">Edit</Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <ConvertTypeButton
+            customerId={id}
+            currentType={customer.type as "PERSONAL" | "COMPANY"}
+            currentName={customer.name}
+            companyName={customer.companyName}
+          />
+          <Link href={`/customers/${id}/edit`} className="text-sm text-blue-600 hover:underline">Edit</Link>
+        </div>
       </div>
 
       {/* Summary stats */}
@@ -84,8 +101,8 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column: Contacts + Addresses */}
         <div className="space-y-4">
-          {/* Contact Persons */}
-          <div className="bg-white rounded-xl border">
+          {/* Contact Persons — COMPANY only */}
+          {customer.type === "COMPANY" && <div className="bg-white rounded-xl border">
             <div className="px-5 py-4 border-b font-semibold text-slate-900">Contact Persons</div>
             <div className="divide-y">
               {customer.contactPersons.length === 0 ? (
@@ -107,7 +124,7 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
                 ))
               )}
             </div>
-          </div>
+          </div>}
 
           {/* Addresses */}
           <div className="bg-white rounded-xl border">
@@ -191,11 +208,11 @@ export default async function Customer360Page({ params }: { params: Promise<{ id
       )}
 
       {/* Changelog */}
-      {customer.changelog.length > 0 && (
+      {changelog.length > 0 && (
         <div className="bg-white rounded-xl border">
           <div className="px-5 py-4 border-b font-semibold text-slate-900">Change History</div>
           <div className="divide-y">
-            {customer.changelog.map((log) => (
+            {changelog.map((log) => (
               <div key={log.id} className="px-5 py-3 text-sm">
                 <span className="font-medium">{log.user?.name ?? "System"}</span>
                 <span className="text-slate-500"> {log.action.toLowerCase()}d </span>

@@ -78,7 +78,7 @@ export default function OnboardingPage() {
           <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
             <Zap className="w-4 h-4 text-yellow-300" />
           </div>
-          <span className="text-base font-bold text-white tracking-tight">ConstructFlow</span>
+          <span className="text-base font-bold text-white tracking-tight">BuildFlow</span>
         </div>
 
         <div className="space-y-6">
@@ -107,7 +107,7 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <p className="text-white/25 text-xs">© 2025 ConstructFlow</p>
+        <p className="text-white/25 text-xs">© 2025 BuildFlow</p>
       </div>
 
       {/* ── Right panel ───────────────────────────────── */}

@@ -1,30 +1,68 @@
 import AWS from "aws-sdk";
 
-function getS3() {
+interface R2Credentials {
+  accountId:       string;
+  accessKeyId:     string;
+  secretAccessKey: string;
+  bucketName:      string;
+  publicUrl:       string;
+}
+
+function makeS3(creds: R2Credentials) {
   return new AWS.S3({
-    endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    endpoint: `https://${creds.accountId}.r2.cloudflarestorage.com`,
+    accessKeyId: creds.accessKeyId,
+    secretAccessKey: creds.secretAccessKey,
     region: "auto",
     signatureVersion: "v4",
   });
 }
 
-export async function uploadToR2(key: string, buffer: Buffer, contentType: string): Promise<string> {
-  await getS3().putObject({
-    Bucket: process.env.R2_BUCKET_NAME!,
+export async function uploadToR2(
+  key: string,
+  buffer: Buffer,
+  contentType: string,
+  creds: R2Credentials
+): Promise<string> {
+  await makeS3(creds).putObject({
+    Bucket: creds.bucketName,
     Key: key,
     Body: buffer,
     ContentType: contentType,
   }).promise();
 
-  return `${process.env.R2_PUBLIC_URL}/${key}`;
+  return `${creds.publicUrl}/${key}`;
 }
 
-export async function deleteFromR2(key: string): Promise<void> {
-  await getS3().deleteObject({ Bucket: process.env.R2_BUCKET_NAME!, Key: key }).promise();
+export async function deleteFromR2(key: string, creds: R2Credentials): Promise<void> {
+  await makeS3(creds).deleteObject({ Bucket: creds.bucketName, Key: key }).promise();
 }
 
 export function getR2Key(tenantId: string, folder: string, filename: string): string {
   return `${tenantId}/${folder}/${Date.now()}-${filename}`;
+}
+
+export function getR2CredsFromConfig(config: {
+  r2AccountId?: string | null;
+  r2AccessKeyId?: string | null;
+  r2SecretAccessKey?: string | null;
+  r2BucketName?: string | null;
+  r2PublicUrl?: string | null;
+}): R2Credentials | null {
+  if (
+    config.r2AccountId &&
+    config.r2AccessKeyId &&
+    config.r2SecretAccessKey &&
+    config.r2BucketName &&
+    config.r2PublicUrl
+  ) {
+    return {
+      accountId:       config.r2AccountId,
+      accessKeyId:     config.r2AccessKeyId,
+      secretAccessKey: config.r2SecretAccessKey,
+      bucketName:      config.r2BucketName,
+      publicUrl:       config.r2PublicUrl,
+    };
+  }
+  return null;
 }

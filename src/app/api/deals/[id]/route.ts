@@ -39,10 +39,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           include: { user: { select: { id: true, name: true } }, site: true },
           orderBy: { checkInAt: "desc" },
         },
-        changelog: {
-          orderBy: { createdAt: "desc" },
-          include: { user: { select: { id: true, name: true } } },
-        },
       },
     });
 

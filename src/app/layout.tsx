@@ -6,13 +6,13 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ConstructFlow",
+  title: "BuildFlow",
   description: "Field workforce & CRM tracking for interior design and construction teams",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "ConstructFlow",
+    title: "BuildFlow",
   },
 };
 

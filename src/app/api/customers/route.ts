@@ -5,6 +5,7 @@ import { Permission, RoleType } from "@prisma/client";
 import { hasPermission } from "@/lib/permissions";
 import { logChange } from "@/lib/changelog";
 import { ChangeLogEntity } from "@prisma/client";
+import { generateDocumentCode } from "@/lib/document-code";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,16 +52,19 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { addresses, contactPersons, ...rest } = body;
 
+    const code = await generateDocumentCode(user.tenantId, "CUSTOMER");
+
     const customer = await prisma.customer.create({
       data: {
         tenantId: user.tenantId,
         ownerId: user.id,
+        code,
         ...rest,
         contactPersons: contactPersons?.filter((c: any) => c.name?.trim()).length
           ? { create: contactPersons.filter((c: any) => c.name?.trim()) }
           : undefined,
-        addresses: addresses?.filter((a: any) => a.address?.trim()).length
-          ? { create: addresses.filter((a: any) => a.address?.trim()).map(({ id: _id, ...a }: any) => a) }
+        addresses: addresses?.filter((a: any) => a.address?.trim() || a.subDistrict?.trim() || a.province?.trim()).length
+          ? { create: addresses.filter((a: any) => a.address?.trim() || a.subDistrict?.trim() || a.province?.trim()).map(({ id: _id, ...a }: any) => a) }
           : undefined,
       },
       include: { contactPersons: true, addresses: true },

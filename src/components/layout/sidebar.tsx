@@ -29,7 +29,7 @@ export function Sidebar() {
         <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center">
           <Zap className="w-4 h-4 text-yellow-300" />
         </div>
-        <span className="text-base font-bold tracking-tight">ConstructFlow</span>
+        <span className="text-base font-bold tracking-tight">BuildFlow</span>
       </div>
 
       {/* Nav items */}
@@ -60,7 +60,7 @@ export function Sidebar() {
 
       <div className="px-4 pb-5">
         <div className="rounded-xl bg-white/10 px-4 py-3 text-xs text-white/40 text-center">
-          ConstructFlow v1.0
+          BuildFlow v1.0
         </div>
       </div>
     </aside>

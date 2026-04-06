@@ -70,8 +70,11 @@ export default async function CustomersPage() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-slate-900 truncate">
-                    {c.companyName ?? c.name}
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-900 truncate">{c.companyName ?? c.name}</span>
+                    {(c as any).code && (
+                      <span className="text-xs font-mono font-medium text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">{(c as any).code}</span>
+                    )}
                   </div>
                   {c.companyName && (
                     <div className="text-sm text-slate-500 truncate">{c.name}</div>

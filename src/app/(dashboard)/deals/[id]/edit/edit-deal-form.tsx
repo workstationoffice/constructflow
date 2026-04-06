@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, DollarSign, MapPin, Calendar, FileText, Users, AlertCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, DollarSign, Calendar, FileText, Users, AlertCircle } from "lucide-react";
+import SiteLocationPicker from "@/components/deals/site-location-picker";
 
 interface Stage { id: string; name: string; color: string }
 interface TeamUser { id: string; name: string; role: string; department: string }
@@ -13,6 +14,8 @@ interface Deal {
   budget: number | null;
   stageId: string;
   siteLocation: string | null;
+  siteLat: number | null;
+  siteLng: number | null;
   requirements: string | null;
   nextContactDate: Date | string | null;
   estimatedCloseDate: Date | string | null;
@@ -22,6 +25,18 @@ interface Deal {
 }
 
 const roleLabel = (r: string) => r.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+function formatNumberInput(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "");
+  return digits ? Number(digits).toLocaleString("en-US") : "";
+}
+function parseNumberInput(formatted: string): number {
+  return parseFloat(formatted.replace(/,/g, "")) || 0;
+}
+function initNumberInput(n: number | null | undefined): string {
+  if (n == null || n === 0) return "";
+  return n.toLocaleString("en-US");
+}
 const deptColor: Record<string, string> = {
   SALES: "text-blue-600 bg-blue-50",
   DESIGN: "text-violet-600 bg-violet-50",
@@ -39,9 +54,11 @@ export default function EditDealForm({ deal, stages, users }: { deal: Deal; stag
 
   const [stageId, setStageId] = useState(deal.stageId);
   const [title, setTitle] = useState(deal.title);
-  const [value, setValue] = useState(String(deal.value));
-  const [budget, setBudget] = useState(deal.budget != null ? String(deal.budget) : "");
+  const [value, setValue] = useState(initNumberInput(deal.value));
+  const [budget, setBudget] = useState(initNumberInput(deal.budget));
   const [siteLocation, setSiteLocation] = useState(deal.siteLocation ?? "");
+  const [siteLat, setSiteLat] = useState<number | null>(deal.siteLat ?? null);
+  const [siteLng, setSiteLng] = useState<number | null>(deal.siteLng ?? null);
   const [requirements, setRequirements] = useState(deal.requirements ?? "");
   const [nextContactDate, setNextContactDate] = useState(toDateInput(deal.nextContactDate));
   const [estimatedCloseDate, setEstimatedCloseDate] = useState(toDateInput(deal.estimatedCloseDate));
@@ -56,6 +73,12 @@ export default function EditDealForm({ deal, stages, users }: { deal: Deal; stag
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errs: string[] = [];
+    if (!value || parseNumberInput(value) <= 0) errs.push("Deal value is required");
+    if (!budget || parseNumberInput(budget) <= 0) errs.push("Customer budget is required");
+    if (!nextContactDate) errs.push("Next contact date is required");
+    if (!estimatedCloseDate) errs.push("Estimated close date is required");
+    if (errs.length > 0) { setErrors(errs); setLoading(false); return; }
     setErrors([]);
     setLoading(true);
     try {
@@ -65,9 +88,11 @@ export default function EditDealForm({ deal, stages, users }: { deal: Deal; stag
         body: JSON.stringify({
           stageId,
           title,
-          value: parseFloat(value) || 0,
-          budget: budget ? parseFloat(budget) : null,
+          value: parseNumberInput(value),
+          budget: parseNumberInput(budget),
           siteLocation: siteLocation || null,
+          siteLat: siteLat ?? null,
+          siteLng: siteLng ?? null,
           requirements: requirements || null,
           nextContactDate: nextContactDate || null,
           estimatedCloseDate: estimatedCloseDate || null,
@@ -137,21 +162,22 @@ export default function EditDealForm({ deal, stages, users }: { deal: Deal; stag
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-emerald-500" />Value (THB)</label>
-              <input type="number" min="0" value={value} onChange={(e) => setValue(e.target.value)} placeholder="0"
-                className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-emerald-500" />Value (THB) <span className="text-red-500">*</span></label>
+              <input type="text" inputMode="numeric" value={value} onChange={(e) => setValue(formatNumberInput(e.target.value))} placeholder="0"
+                className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors text-right font-mono" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-orange-500" />Budget (THB)</label>
-              <input type="number" min="0" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="0"
-                className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
+              <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5 text-orange-500" />Budget (THB) <span className="text-red-500">*</span></label>
+              <input type="text" inputMode="numeric" value={budget} onChange={(e) => setBudget(formatNumberInput(e.target.value))} placeholder="0"
+                className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors text-right font-mono" />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-slate-700 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-slate-400" />Site Location</label>
-            <input value={siteLocation} onChange={(e) => setSiteLocation(e.target.value)} placeholder="e.g. Silom Complex, Bangkok"
-              className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
-          </div>
+          <SiteLocationPicker
+            value={siteLocation}
+            lat={siteLat}
+            lng={siteLng}
+            onChange={(loc, la, ln) => { setSiteLocation(loc); setSiteLat(la); setSiteLng(ln); }}
+          />
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-slate-700">Requirements</label>
             <textarea value={requirements} onChange={(e) => setRequirements(e.target.value)} rows={3}
@@ -169,12 +195,12 @@ export default function EditDealForm({ deal, stages, users }: { deal: Deal; stag
           </h2>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Next Contact Date</label>
+              <label className="text-sm font-medium text-slate-700">Next Contact Date <span className="text-red-500">*</span></label>
               <input type="date" value={nextContactDate} onChange={(e) => setNextContactDate(e.target.value)}
                 className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-slate-700">Est. Close Date</label>
+              <label className="text-sm font-medium text-slate-700">Est. Close Date <span className="text-red-500">*</span></label>
               <input type="date" value={estimatedCloseDate} onChange={(e) => setEstimatedCloseDate(e.target.value)}
                 className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors" />
             </div>
